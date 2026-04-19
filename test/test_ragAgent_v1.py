@@ -57,11 +57,13 @@ def make_route_state(relevance_score: str, rewrite_count: int) -> dict:
             HumanMessage(content="李四六的年龄是多少？"),
             AIMessage(
                 content="",
-                tool_calls=[{
-                    "id": "call_route_test",
-                    "name": "retrieve",
-                    "args": {"query": "李四六年龄"},
-                }],
+                tool_calls=[
+                    {
+                        "id": "call_route_test",
+                        "name": "retrieve",
+                        "args": {"query": "李四六年龄"},
+                    }
+                ],
             ),
             ToolMessage(
                 content="患者姓名为李四六，出生于1990年3月15日，目前34岁。",
@@ -87,13 +89,15 @@ def llm_and_tools():
 @pytest.fixture(scope="module")
 def middleware_manager(llm_and_tools):
     """初始化 Middleware 管理器"""
-    manager = MiddlewareManager([
-        LoggingMiddleware(),
-        ModelCallLimitMiddleware(max_calls=20),
-        PIIDetectionMiddleware(mode="warn"),
-        SummarizationMiddleware(max_messages=15, keep_recent=5),
-        ToolRetryMiddleware(max_retries=2),
-    ])
+    manager = MiddlewareManager(
+        [
+            LoggingMiddleware(),
+            ModelCallLimitMiddleware(max_calls=20),
+            PIIDetectionMiddleware(mode="warn"),
+            SummarizationMiddleware(max_messages=15, keep_recent=5),
+            ToolRetryMiddleware(max_retries=2),
+        ]
+    )
     return manager
 
 
@@ -152,12 +156,15 @@ class TestInitialization:
 class TestRetrievalAndGeneration:
     """检索 + 生成流程测试"""
 
-    @pytest.mark.parametrize("query_key", [
-        "basic_info",
-        "allergy",
-        "cholesterol",
-        "suggestion",
-    ])
+    @pytest.mark.parametrize(
+        "query_key",
+        [
+            "basic_info",
+            "allergy",
+            "cholesterol",
+            "suggestion",
+        ],
+    )
     def test_retrieval_and_generation(self, graph, test_config, query_key):
         """测试检索 + 生成流程是否能正确回答知识库中的问题"""
         query = TEST_QUERIES[query_key]
@@ -205,8 +212,16 @@ class TestIrrelevantQuery:
         rewrite_triggered = result.get("rewrite_count", 0) > 0
 
         direct_handle_keywords = [
-            "天气", "无法", "抱歉", "不能", "不在", "超出",
-            "知识库", "没有相关", "无法回答", "weather",
+            "天气",
+            "无法",
+            "抱歉",
+            "不能",
+            "不在",
+            "超出",
+            "知识库",
+            "没有相关",
+            "无法回答",
+            "weather",
         ]
         handled_directly = any(kw in content for kw in direct_handle_keywords)
 
@@ -232,11 +247,13 @@ class TestGradeDocuments:
                 HumanMessage(content="李四六的年龄是多少？"),
                 AIMessage(
                     content="",
-                    tool_calls=[{
-                        "id": "call_test_001",
-                        "name": "retrieve",
-                        "args": {"query": "李四六的年龄"},
-                    }],
+                    tool_calls=[
+                        {
+                            "id": "call_test_001",
+                            "name": "retrieve",
+                            "args": {"query": "李四六的年龄"},
+                        }
+                    ],
                 ),
                 ToolMessage(
                     content="患者姓名为李四六，出生于1990年3月15日，目前34岁。职业为小学教师。",
@@ -251,9 +268,10 @@ class TestGradeDocuments:
         result = grade_documents(state, llm_chat)
 
         assert "relevance_score" in result, "grade_documents 未返回 relevance_score"
-        assert result["relevance_score"] in ["yes", "no"], (
-            f"relevance_score 应为 'yes' 或 'no'，实际为: {result['relevance_score']}"
-        )
+        assert result["relevance_score"] in [
+            "yes",
+            "no",
+        ], f"relevance_score 应为 'yes' 或 'no'，实际为: {result['relevance_score']}"
 
     def test_grade_documents_with_irrelevant_content(self, llm_and_tools):
         """测试：提供不相关文档时，评分应为 'no'"""
@@ -264,11 +282,13 @@ class TestGradeDocuments:
                 HumanMessage(content="李四六的年龄是多少？"),
                 AIMessage(
                     content="",
-                    tool_calls=[{
-                        "id": "call_test_002",
-                        "name": "retrieve",
-                        "args": {"query": "李四六的年龄"},
-                    }],
+                    tool_calls=[
+                        {
+                            "id": "call_test_002",
+                            "name": "retrieve",
+                            "args": {"query": "李四六的年龄"},
+                        }
+                    ],
                 ),
                 ToolMessage(
                     content="今日股市大盘上涨2.5%，科技板块表现强劲。天气预报显示明天多云。",
@@ -289,7 +309,7 @@ class TestGradeDocuments:
 # ====================== 单元测试：路由函数 ======================
 class TestRouting:
     """路由函数逻辑测试
-    
+
     注意：route_after_grade 内部会检查 state["messages"] 字段，
     如果缺失则默认返回 "rewrite"。所以测试必须提供完整的 messages。
     """
@@ -298,41 +318,42 @@ class TestRouting:
         """评分为 yes → 生成"""
         state = make_route_state(relevance_score="yes", rewrite_count=0)
         result = route_after_grade(state)
-        assert result == "generate", (
-            f"relevance_score='yes' 时应路由到 'generate'，实际: '{result}'"
-        )
+        assert (
+            result == "generate"
+        ), f"relevance_score='yes' 时应路由到 'generate'，实际: '{result}'"
 
     def test_route_after_grade_irrelevant_first_time(self):
         """评分为 no 且首次 → 重写"""
         state = make_route_state(relevance_score="no", rewrite_count=0)
         result = route_after_grade(state)
-        assert result == "rewrite", (
-            f"relevance_score='no', rewrite_count=0 时应路由到 'rewrite'，实际: '{result}'"
-        )
+        assert (
+            result == "rewrite"
+        ), f"relevance_score='no', rewrite_count=0 时应路由到 'rewrite'，实际: '{result}'"
 
     def test_route_after_grade_irrelevant_exceeded(self):
         """评分为 no 且重写次数超限 → 强制生成"""
         state = make_route_state(relevance_score="no", rewrite_count=4)
         result = route_after_grade(state)
-        assert result == "generate", (
-            f"rewrite_count=4 超限时应强制 'generate'，实际: '{result}'"
-        )
+        assert (
+            result == "generate"
+        ), f"rewrite_count=4 超限时应强制 'generate'，实际: '{result}'"
 
     def test_route_after_grade_boundary(self):
         """测试重写次数边界值"""
         state = make_route_state(relevance_score="no", rewrite_count=2)
         result = route_after_grade(state)
-        assert result in ["rewrite", "generate"], (
-            f"边界值测试，结果应为 'rewrite' 或 'generate'，实际: '{result}'"
-        )
+        assert result in [
+            "rewrite",
+            "generate",
+        ], f"边界值测试，结果应为 'rewrite' 或 'generate'，实际: '{result}'"
 
     def test_route_after_grade_yes_with_high_rewrite(self):
         """评分为 yes 时，无论 rewrite_count 多大都应该 generate"""
         state = make_route_state(relevance_score="yes", rewrite_count=10)
         result = route_after_grade(state)
-        assert result == "generate", (
-            f"relevance_score='yes' 时应始终 'generate'，实际: '{result}'"
-        )
+        assert (
+            result == "generate"
+        ), f"relevance_score='yes' 时应始终 'generate'，实际: '{result}'"
 
     def test_route_after_tools_with_retrieve(self, llm_and_tools):
         """工具为 retrieve → 应路由到 grade_documents"""
@@ -343,11 +364,13 @@ class TestRouting:
                 HumanMessage(content="李四六的年龄？"),
                 AIMessage(
                     content="",
-                    tool_calls=[{
-                        "id": "call_route_001",
-                        "name": "retrieve",
-                        "args": {"query": "李四六年龄"},
-                    }],
+                    tool_calls=[
+                        {
+                            "id": "call_route_001",
+                            "name": "retrieve",
+                            "args": {"query": "李四六年龄"},
+                        }
+                    ],
                 ),
                 ToolMessage(
                     content="患者李四六，34岁。",
@@ -358,9 +381,10 @@ class TestRouting:
         }
 
         result = route_after_tools(state, tool_config)
-        assert result in ["generate", "grade_documents"], (
-            f"retrieve 工具后应路由到 'grade_documents' 或 'generate'，实际: '{result}'"
-        )
+        assert result in [
+            "generate",
+            "grade_documents",
+        ], f"retrieve 工具后应路由到 'grade_documents' 或 'generate'，实际: '{result}'"
 
     def test_route_after_tools_with_non_retrieve(self, llm_and_tools):
         """非检索工具 → 应路由到 generate"""
@@ -371,11 +395,13 @@ class TestRouting:
                 HumanMessage(content="计算 3 乘以 5"),
                 AIMessage(
                     content="",
-                    tool_calls=[{
-                        "id": "call_route_002",
-                        "name": "multiply",
-                        "args": {"a": 3, "b": 5},
-                    }],
+                    tool_calls=[
+                        {
+                            "id": "call_route_002",
+                            "name": "multiply",
+                            "args": {"a": 3, "b": 5},
+                        }
+                    ],
                 ),
                 ToolMessage(
                     content="15",
@@ -386,9 +412,9 @@ class TestRouting:
         }
 
         result = route_after_tools(state, tool_config)
-        assert result == "generate", (
-            f"非检索工具后应路由到 'generate'，实际: '{result}'"
-        )
+        assert (
+            result == "generate"
+        ), f"非检索工具后应路由到 'generate'，实际: '{result}'"
 
 
 # ====================== Middleware 测试 ======================
@@ -408,27 +434,19 @@ class TestMiddleware:
         call_count = result.get("mw_model_call_count", 0)
         total_time = result.get("mw_model_total_time", 0.0)
 
-        assert call_count >= 2, (
-            f"模型调用次数不足，期望 >= 2，实际: {call_count}"
-        )
-        assert total_time > 0, (
-            f"模型累计耗时应 > 0，实际: {total_time}"
-        )
+        assert call_count >= 2, f"模型调用次数不足，期望 >= 2，实际: {call_count}"
+        assert total_time > 0, f"模型累计耗时应 > 0，实际: {total_time}"
 
     def test_pii_detection_warn_mode(self, middleware_manager):
         """测试 PII 检测 Middleware（warn 模式）"""
         state = {
             "messages": [
-                HumanMessage(
-                    content="我的身份证号是 110101199003152345，请帮我查询。"
-                ),
+                HumanMessage(content="我的身份证号是 110101199003152345，请帮我查询。"),
             ],
         }
 
         updates, should_stop = middleware_manager.run_before_model(state, "agent")
-        assert updates.get("mw_pii_detected") is True, (
-            "PII 检测应识别出身份证号"
-        )
+        assert updates.get("mw_pii_detected") is True, "PII 检测应识别出身份证号"
 
     def test_pii_detection_no_pii(self, middleware_manager):
         """测试无 PII 时不误报"""
@@ -440,9 +458,7 @@ class TestMiddleware:
 
         updates, should_stop = middleware_manager.run_before_model(state, "agent")
         pii_detected = updates.get("mw_pii_detected", False)
-        assert pii_detected is False or pii_detected is None, (
-            "无 PII 内容时不应误报"
-        )
+        assert pii_detected is False or pii_detected is None, "无 PII 内容时不应误报"
 
     def test_model_call_limit(self):
         """测试模型调用次数限制 Middleware"""
@@ -481,15 +497,21 @@ class TestMultiUser:
             }
         }
 
-        result_a = graph.invoke({
-            "messages": [{"role": "user", "content": "李四六的年龄？"}],
-            "rewrite_count": 0,
-        }, config_a)
+        result_a = graph.invoke(
+            {
+                "messages": [{"role": "user", "content": "李四六的年龄？"}],
+                "rewrite_count": 0,
+            },
+            config_a,
+        )
 
-        result_b = graph.invoke({
-            "messages": [{"role": "user", "content": "李四六的过敏史？"}],
-            "rewrite_count": 0,
-        }, config_b)
+        result_b = graph.invoke(
+            {
+                "messages": [{"role": "user", "content": "李四六的过敏史？"}],
+                "rewrite_count": 0,
+            },
+            config_b,
+        )
 
         count_a = result_a.get("mw_model_call_count", 0)
         count_b = result_b.get("mw_model_call_count", 0)
@@ -511,16 +533,17 @@ class TestPerformance:
         """测试完整工作流性能"""
         start = time.time()
 
-        result = graph.invoke({
-            "messages": [{"role": "user", "content": TEST_QUERIES["cholesterol"]}],
-            "rewrite_count": 0,
-        }, test_config)
+        result = graph.invoke(
+            {
+                "messages": [{"role": "user", "content": TEST_QUERIES["cholesterol"]}],
+                "rewrite_count": 0,
+            },
+            test_config,
+        )
 
         duration = time.time() - start
 
-        assert duration < 60.0, (
-            f"响应时间过长: {duration:.2f}s（阈值 60s）"
-        )
+        assert duration < 60.0, f"响应时间过长: {duration:.2f}s（阈值 60s）"
         assert len(result["messages"]) > 0, "返回消息不应为空"
 
         content = extract_content(result)
@@ -535,37 +558,44 @@ class TestPerformance:
         ]
 
         for i, query in enumerate(queries):
-            result = graph.invoke({
-                "messages": [{"role": "user", "content": query}],
-                "rewrite_count": 0,
-            }, test_config)
+            result = graph.invoke(
+                {
+                    "messages": [{"role": "user", "content": query}],
+                    "rewrite_count": 0,
+                },
+                test_config,
+            )
 
             content = extract_content(result)
-            assert len(content.strip()) > 0, (
-                f"第 {i + 1} 轮查询 '{query}' 返回为空"
-            )
+            assert len(content.strip()) > 0, f"第 {i + 1} 轮查询 '{query}' 返回为空"
 
     def test_empty_query_handling(self, graph, test_config):
         """测试空查询不会导致崩溃"""
         try:
-            result = graph.invoke({
-                "messages": [{"role": "user", "content": ""}],
-                "rewrite_count": 0,
-            }, test_config)
+            result = graph.invoke(
+                {
+                    "messages": [{"role": "user", "content": ""}],
+                    "rewrite_count": 0,
+                },
+                test_config,
+            )
             assert result is not None
         except Exception as e:
-            assert isinstance(e, (ValueError, KeyError)), (
-                f"空查询导致意外异常: {type(e).__name__}: {e}"
-            )
+            assert isinstance(
+                e, (ValueError, KeyError)
+            ), f"空查询导致意外异常: {type(e).__name__}: {e}"
 
     def test_long_query_handling(self, graph, test_config):
         """测试超长查询不会导致崩溃"""
         long_query = "李四六的健康状况如何？" * 50
 
-        result = graph.invoke({
-            "messages": [{"role": "user", "content": long_query}],
-            "rewrite_count": 0,
-        }, test_config)
+        result = graph.invoke(
+            {
+                "messages": [{"role": "user", "content": long_query}],
+                "rewrite_count": 0,
+            },
+            test_config,
+        )
 
         content = extract_content(result)
         assert len(content.strip()) > 0, "超长查询应返回非空回复"
@@ -585,9 +615,9 @@ class TestEdgeCases:
         result = graph.invoke(inputs, test_config)
 
         assert "rewrite_count" in result, "结果中应包含 rewrite_count 字段"
-        assert isinstance(result["rewrite_count"], int), (
-            f"rewrite_count 应为 int，实际: {type(result['rewrite_count'])}"
-        )
+        assert isinstance(
+            result["rewrite_count"], int
+        ), f"rewrite_count 应为 int，实际: {type(result['rewrite_count'])}"
 
     def test_messages_list_grows(self, graph, test_config):
         """测试消息列表在流程中正确增长"""
@@ -599,9 +629,7 @@ class TestEdgeCases:
         result = graph.invoke(inputs, test_config)
 
         msg_count = len(result["messages"])
-        assert msg_count >= 2, (
-            f"消息列表应至少有 2 条，实际: {msg_count}"
-        )
+        assert msg_count >= 2, f"消息列表应至少有 2 条，实际: {msg_count}"
 
     def test_result_structure(self, graph, test_config):
         """测试返回结果的结构完整性"""
@@ -619,11 +647,13 @@ class TestEdgeCases:
 
 # ====================== 运行入口 ======================
 if __name__ == "__main__":
-    pytest.main([
-        "-v",
-        "--tb=short",
-        "--durations=10",
-        "--html=report.html",   # 👈 生成报告
-        "--self-contained-html",  # 👈 单文件（推荐）
-        "test_ragAgent.py",
-    ])
+    pytest.main(
+        [
+            "-v",
+            "--tb=short",
+            "--durations=10",
+            "--html=report.html",  # 👈 生成报告
+            "--self-contained-html",  # 👈 单文件（推荐）
+            "test_ragAgent.py",
+        ]
+    )

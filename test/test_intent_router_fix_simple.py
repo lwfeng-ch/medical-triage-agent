@@ -8,6 +8,7 @@
 
 测试用例基于实际测试结果文件 langsmith_copy.md 中的失败案例。
 """
+
 import pytest
 
 
@@ -17,7 +18,7 @@ class TestMedicalKeywordPrecheck:
     def test_health_record_keywords(self):
         """
         测试健康档案关键词。
-        
+
         关键词列表：
         - 身体状况
         - 健康档案
@@ -25,7 +26,10 @@ class TestMedicalKeywordPrecheck:
         - 体检报告
         """
         MEDICAL_KEYWORDS = [
-            "身体状况", "健康档案", "病历", "体检报告",
+            "身体状况",
+            "健康档案",
+            "病历",
+            "体检报告",
         ]
 
         test_cases = [
@@ -40,15 +44,16 @@ class TestMedicalKeywordPrecheck:
             for keyword in MEDICAL_KEYWORDS:
                 if keyword in query:
                     matched = True
-                    assert keyword == expected_keyword, \
-                        f"查询 '{query}' 应匹配关键词 '{expected_keyword}'，实际匹配 '{keyword}'"
+                    assert (
+                        keyword == expected_keyword
+                    ), f"查询 '{query}' 应匹配关键词 '{expected_keyword}'，实际匹配 '{keyword}'"
                     break
             assert matched, f"查询 '{query}' 应匹配关键词 '{expected_keyword}'"
 
     def test_blood_test_keywords(self):
         """
         测试血检报告关键词。
-        
+
         关键词列表：
         - 血常规
         - 尿常规
@@ -61,9 +66,16 @@ class TestMedicalKeywordPrecheck:
         - 淋巴细胞
         """
         MEDICAL_KEYWORDS = [
-            "血常规", "尿常规", "生化", "生命体征",
-            "白细胞", "血红蛋白", "血小板", "红细胞",
-            "中性粒细胞", "淋巴细胞",
+            "血常规",
+            "尿常规",
+            "生化",
+            "生命体征",
+            "白细胞",
+            "血红蛋白",
+            "血小板",
+            "红细胞",
+            "中性粒细胞",
+            "淋巴细胞",
         ]
 
         test_cases = [
@@ -79,15 +91,16 @@ class TestMedicalKeywordPrecheck:
             for keyword in MEDICAL_KEYWORDS:
                 if keyword in query:
                     matched = True
-                    assert keyword == expected_keyword, \
-                        f"查询 '{query}' 应匹配关键词 '{expected_keyword}'，实际匹配 '{keyword}'"
+                    assert (
+                        keyword == expected_keyword
+                    ), f"查询 '{query}' 应匹配关键词 '{expected_keyword}'，实际匹配 '{keyword}'"
                     break
             assert matched, f"查询 '{query}' 应匹配关键词 '{expected_keyword}'"
 
     def test_symptom_keywords(self):
         """
         测试症状关键词。
-        
+
         关键词列表：
         - 头疼/头痛
         - 发烧/发热
@@ -99,8 +112,16 @@ class TestMedicalKeywordPrecheck:
         - 便秘
         """
         MEDICAL_KEYWORDS = [
-            "头疼", "头痛", "发烧", "发热", "咳嗽", "腹痛",
-            "恶心", "呕吐", "腹泻", "便秘",
+            "头疼",
+            "头痛",
+            "发烧",
+            "发热",
+            "咳嗽",
+            "腹痛",
+            "恶心",
+            "呕吐",
+            "腹泻",
+            "便秘",
         ]
 
         test_cases = [
@@ -117,15 +138,16 @@ class TestMedicalKeywordPrecheck:
             for keyword in MEDICAL_KEYWORDS:
                 if keyword in query:
                     matched = True
-                    assert keyword == expected_keyword, \
-                        f"查询 '{query}' 应匹配关键词 '{expected_keyword}'，实际匹配 '{keyword}'"
+                    assert (
+                        keyword == expected_keyword
+                    ), f"查询 '{query}' 应匹配关键词 '{expected_keyword}'，实际匹配 '{keyword}'"
                     break
             assert matched, f"查询 '{query}' 应匹配关键词 '{expected_keyword}'"
 
     def test_medical_action_keywords(self):
         """
         测试医疗行为关键词。
-        
+
         关键词列表：
         - 诊断
         - 治疗
@@ -134,7 +156,11 @@ class TestMedicalKeywordPrecheck:
         - 体检
         """
         MEDICAL_KEYWORDS = [
-            "诊断", "治疗", "用药", "复查", "体检",
+            "诊断",
+            "治疗",
+            "用药",
+            "复查",
+            "体检",
         ]
 
         test_cases = [
@@ -150,15 +176,16 @@ class TestMedicalKeywordPrecheck:
             for keyword in MEDICAL_KEYWORDS:
                 if keyword in query:
                     matched = True
-                    assert keyword == expected_keyword, \
-                        f"查询 '{query}' 应匹配关键词 '{expected_keyword}'，实际匹配 '{keyword}'"
+                    assert (
+                        keyword == expected_keyword
+                    ), f"查询 '{query}' 应匹配关键词 '{expected_keyword}'，实际匹配 '{keyword}'"
                     break
             assert matched, f"查询 '{query}' 应匹配关键词 '{expected_keyword}'"
 
     def test_abnormal_indicator_keywords(self):
         """
         测试异常指标关键词。
-        
+
         关键词列表：
         - 偏高
         - 偏低
@@ -167,7 +194,11 @@ class TestMedicalKeywordPrecheck:
         - 异常
         """
         MEDICAL_KEYWORDS = [
-            "偏高", "偏低", "升高", "降低", "异常",
+            "偏高",
+            "偏低",
+            "升高",
+            "降低",
+            "异常",
         ]
 
         test_cases = [
@@ -183,8 +214,9 @@ class TestMedicalKeywordPrecheck:
             for keyword in MEDICAL_KEYWORDS:
                 if keyword in query:
                     matched = True
-                    assert keyword == expected_keyword, \
-                        f"查询 '{query}' 应匹配关键词 '{expected_keyword}'，实际匹配 '{keyword}'"
+                    assert (
+                        keyword == expected_keyword
+                    ), f"查询 '{query}' 应匹配关键词 '{expected_keyword}'，实际匹配 '{keyword}'"
                     break
             assert matched, f"查询 '{query}' 应匹配关键词 '{expected_keyword}'"
 
@@ -195,22 +227,48 @@ class TestRealWorldCases:
     def test_case_1_health_record_query(self):
         """
         测试案例1：健康档案查询
-        
+
         用户输入："我是张三九，告诉我2年内我的身体状况，并与当前的血检报告进行对比分析。"
         预期路由：medical
         实际路由（修复前）：general
         """
         query = "我是张三九，告诉我2年内我的身体状况，并与当前的血检报告进行对比分析。"
-        
+
         MEDICAL_KEYWORDS = [
-            "身体状况", "健康档案", "病历", "体检报告",
-            "血常规", "尿常规", "生化", "生命体征",
-            "白细胞", "血红蛋白", "血小板", "红细胞",
-            "中性粒细胞", "淋巴细胞",
-            "头疼", "头痛", "发烧", "发热", "咳嗽", "腹痛",
-            "恶心", "呕吐", "腹泻", "便秘",
-            "诊断", "治疗", "用药", "复查", "体检",
-            "偏高", "偏低", "升高", "降低", "异常",
+            "身体状况",
+            "健康档案",
+            "病历",
+            "体检报告",
+            "血常规",
+            "尿常规",
+            "生化",
+            "生命体征",
+            "白细胞",
+            "血红蛋白",
+            "血小板",
+            "红细胞",
+            "中性粒细胞",
+            "淋巴细胞",
+            "头疼",
+            "头痛",
+            "发烧",
+            "发热",
+            "咳嗽",
+            "腹痛",
+            "恶心",
+            "呕吐",
+            "腹泻",
+            "便秘",
+            "诊断",
+            "治疗",
+            "用药",
+            "复查",
+            "体检",
+            "偏高",
+            "偏低",
+            "升高",
+            "降低",
+            "异常",
         ]
 
         matched = False
@@ -222,17 +280,19 @@ class TestRealWorldCases:
                 break
 
         assert matched, f"查询 '{query}' 应匹配医疗关键词"
-        assert matched_keyword == "身体状况", f"查询应匹配关键词 '身体状况'，实际匹配 '{matched_keyword}'"
+        assert (
+            matched_keyword == "身体状况"
+        ), f"查询应匹配关键词 '身体状况'，实际匹配 '{matched_keyword}'"
 
     def test_case_2_blood_test_report(self):
         """
         测试案例2：血检报告分析
-        
+
         用户输入包含完整的血检报告数据：
         - 血常规检查报告
         - 白细胞计数：18.5 ×10⁹/L（异常升高）
         - 中性粒细胞百分比：85%（异常升高）
-        
+
         预期路由：medical
         实际路由（修复前）：general
         """
@@ -252,14 +312,40 @@ class TestRealWorldCases:
 gender: male"""
 
         MEDICAL_KEYWORDS = [
-            "身体状况", "健康档案", "病历", "体检报告",
-            "血常规", "尿常规", "生化", "生命体征",
-            "白细胞", "血红蛋白", "血小板", "红细胞",
-            "中性粒细胞", "淋巴细胞",
-            "头疼", "头痛", "发烧", "发热", "咳嗽", "腹痛",
-            "恶心", "呕吐", "腹泻", "便秘",
-            "诊断", "治疗", "用药", "复查", "体检",
-            "偏高", "偏低", "升高", "降低", "异常",
+            "身体状况",
+            "健康档案",
+            "病历",
+            "体检报告",
+            "血常规",
+            "尿常规",
+            "生化",
+            "生命体征",
+            "白细胞",
+            "血红蛋白",
+            "血小板",
+            "红细胞",
+            "中性粒细胞",
+            "淋巴细胞",
+            "头疼",
+            "头痛",
+            "发烧",
+            "发热",
+            "咳嗽",
+            "腹痛",
+            "恶心",
+            "呕吐",
+            "腹泻",
+            "便秘",
+            "诊断",
+            "治疗",
+            "用药",
+            "复查",
+            "体检",
+            "偏高",
+            "偏低",
+            "升高",
+            "降低",
+            "异常",
         ]
 
         matched = False
@@ -276,8 +362,10 @@ gender: male"""
 
 
 if __name__ == "__main__":
-    pytest.main([
-        "-v",
-        "--tb=short",
-        __file__,
-    ])
+    pytest.main(
+        [
+            "-v",
+            "--tb=short",
+            __file__,
+        ]
+    )
