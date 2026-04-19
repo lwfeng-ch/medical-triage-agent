@@ -53,3 +53,5 @@ openai>=1.30.0
 tiktoken>=0.7.0
 python-dotenv>=1.0.0  # 可选：用于 .env 文件覆盖敏感配置（非必须）
 tqdm>=4.66.0
+
+pytest>=7.0.0

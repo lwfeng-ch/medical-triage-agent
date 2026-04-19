@@ -19,10 +19,19 @@ Gradio WebUI - 智能分诊系统前端界面（优化版）
 
 与 main.py API 接口完全对齐
 """
+
 import os
+
 os.environ["NO_PROXY"] = "localhost,127.0.0.1,0.0.0.0"
 os.environ["no_proxy"] = "localhost,127.0.0.1,0.0.0.0"
-for proxy_var in ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"]:
+for proxy_var in [
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "ALL_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "all_proxy",
+]:
     os.environ[proxy_var] = ""
 os.environ["GRADIO_SERVER_NAME"] = "0.0.0.0"
 
@@ -42,7 +51,9 @@ from typing import Optional, Dict, List, Any, Tuple
 from dataclasses import dataclass, field
 import logging
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 API_BASE_URL = "http://localhost:8012"
@@ -50,13 +61,13 @@ CHAT_ENDPOINT = f"{API_BASE_URL}/v1/chat/completions"
 HEALTH_ENDPOINT = f"{API_BASE_URL}/health"
 
 # ── 常量 ─────────────────────────────────────────────────────────────────────
-NO_HISTORY_LABEL   = "无历史会话"
+NO_HISTORY_LABEL = "无历史会话"
 DEFAULT_CONV_TITLE = "新的对话"
-DB_PATH            = "triage_users.db"
+DB_PATH = "triage_users.db"
 
 # ── 频率限制配置 ──────────────────────────────────────────────────────────────
 RATE_LIMIT_SECONDS = 1.5
-_rate_limit_lock   = threading.Lock()
+_rate_limit_lock = threading.Lock()
 _last_request_time: Dict[str, float] = {}
 
 
@@ -107,31 +118,38 @@ def db_save_user(username: str, user_id: str, password_hash: str, salt: str) -> 
     with _db_lock, _get_conn() as conn:
         conn.execute(
             "INSERT INTO users (username, user_id, password_hash, salt, created_at) VALUES (?,?,?,?,?)",
-            (username, user_id, password_hash, salt, get_current_time())
+            (username, user_id, password_hash, salt, get_current_time()),
         )
 
 
 def db_get_user(username: str) -> Optional[sqlite3.Row]:
     with _get_conn() as conn:
-        return conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
+        return conn.execute(
+            "SELECT * FROM users WHERE username=?", (username,)
+        ).fetchone()
 
 
 def db_update_sidebar(username: str, collapsed: bool) -> None:
     with _db_lock, _get_conn() as conn:
-        conn.execute("UPDATE users SET sidebar_collapsed=? WHERE username=?", (int(collapsed), username))
+        conn.execute(
+            "UPDATE users SET sidebar_collapsed=? WHERE username=?",
+            (int(collapsed), username),
+        )
 
 
 def db_save_conversation(conv_id: str, username: str, title: str) -> None:
     with _db_lock, _get_conn() as conn:
         conn.execute(
             "INSERT OR IGNORE INTO conversations (conv_id, username, title, created_at) VALUES (?,?,?,?)",
-            (conv_id, username, title, get_current_time())
+            (conv_id, username, title, get_current_time()),
         )
 
 
 def db_update_conv_title(conv_id: str, title: str) -> None:
     with _db_lock, _get_conn() as conn:
-        conn.execute("UPDATE conversations SET title=? WHERE conv_id=?", (title, conv_id))
+        conn.execute(
+            "UPDATE conversations SET title=? WHERE conv_id=?", (title, conv_id)
+        )
 
 
 def db_delete_conversation(conv_id: str) -> None:
@@ -143,7 +161,8 @@ def db_delete_conversation(conv_id: str) -> None:
 def db_get_conversations(username: str) -> List[sqlite3.Row]:
     with _get_conn() as conn:
         return conn.execute(
-            "SELECT * FROM conversations WHERE username=? ORDER BY created_at DESC", (username,)
+            "SELECT * FROM conversations WHERE username=? ORDER BY created_at DESC",
+            (username,),
         ).fetchall()
 
 
@@ -152,14 +171,15 @@ def db_save_messages(conv_id: str, messages: List[Dict]) -> None:
         conn.execute("DELETE FROM messages WHERE conv_id=?", (conv_id,))
         conn.executemany(
             "INSERT INTO messages (conv_id, role, content, created_at) VALUES (?,?,?,?)",
-            [(conv_id, m["role"], m["content"], get_current_time()) for m in messages]
+            [(conv_id, m["role"], m["content"], get_current_time()) for m in messages],
         )
 
 
 def db_get_messages(conv_id: str) -> List[Dict]:
     with _get_conn() as conn:
         rows = conn.execute(
-            "SELECT role, content FROM messages WHERE conv_id=? ORDER BY id ASC", (conv_id,)
+            "SELECT role, content FROM messages WHERE conv_id=? ORDER BY id ASC",
+            (conv_id,),
         ).fetchall()
     return [{"role": r["role"], "content": r["content"]} for r in rows]
 
@@ -167,6 +187,7 @@ def db_get_messages(conv_id: str) -> List[Dict]:
 # ═══════════════════════════════════════════════════════════════════════════════
 # 密码哈希工具
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 def hash_password(password: str, salt: Optional[str] = None) -> Tuple[str, str]:
     if salt is None:
@@ -185,30 +206,30 @@ def verify_password(password: str, stored_hash: str, salt: str) -> bool:
 # ═══════════════════════════════════════════════════════════════════════════════
 _session_tokens: Dict[str, str] = {}
 _user_api_keys: Dict[str, str] = {}  # username -> API Key 映射
-_session_lock   = threading.Lock()
+_session_lock = threading.Lock()
 
 
 def create_session_token(username: str) -> str:
     """
     创建 Session Token（同时生成用户 API Key）
-    
+
     Args:
         username: 用户名
-        
+
     Returns:
         str: Session Token
     """
     token = secrets.token_urlsafe(32)
     # 为用户生成固定的 API Key（用于文档上传等需要认证的请求）
     api_key = f"sk-{secrets.token_urlsafe(24)}"
-    
+
     with _session_lock:
         old = [t for t, u in _session_tokens.items() if u == username]
         for t in old:
             del _session_tokens[t]
         _session_tokens[token] = username
         _user_api_keys[username] = api_key
-    
+
     logger.info(f"用户 {username} 登录成功，生成 API Key: {api_key[:10]}...")
     return token
 
@@ -216,10 +237,10 @@ def create_session_token(username: str) -> str:
 def get_user_api_key(username: str) -> Optional[str]:
     """
     获取用户的 API Key
-    
+
     Args:
         username: 用户名
-        
+
     Returns:
         str: API Key，不存在返回 None
     """
@@ -252,16 +273,17 @@ def check_rate_limit(token: str) -> Tuple[bool, str]:
         _last_request_time[token] = now
     return True, ""
 
+
 #   分诊数据模型
 @dataclass
 class TriageData:
     recommended_departments: List[str] = field(default_factory=list)
-    urgency_level:           str       = "routine"
-    triage_reason:           str       = ""
-    triage_confidence:       float     = 0.8
+    urgency_level: str = "routine"
+    triage_reason: str = ""
+    triage_confidence: float = 0.8
 
     @classmethod
-    def from_dict(cls, data: Dict) -> 'TriageData':
+    def from_dict(cls, data: Dict) -> "TriageData":
         if not data:
             return cls()
         return cls(
@@ -274,11 +296,11 @@ class TriageData:
 
 @dataclass
 class StructuredMedicalData:
-    triage:   TriageData               = field(default_factory=TriageData)
+    triage: TriageData = field(default_factory=TriageData)
     analysis: Optional[Dict[str, Any]] = None
 
     @classmethod
-    def from_dict(cls, data: Dict) -> 'StructuredMedicalData':
+    def from_dict(cls, data: Dict) -> "StructuredMedicalData":
         if not data:
             return cls()
         return cls(
@@ -289,24 +311,27 @@ class StructuredMedicalData:
 
 @dataclass
 class MedicalExtension:
-    risk_level:      str                          = "low"
-    risk_warning:    str                          = ""
-    disclaimer:      str                          = ""
+    risk_level: str = "low"
+    risk_warning: str = ""
+    disclaimer: str = ""
     structured_data: Optional[StructuredMedicalData] = None
 
     @classmethod
-    def from_dict(cls, data: Dict) -> 'MedicalExtension':
+    def from_dict(cls, data: Dict) -> "MedicalExtension":
         if not data:
             return cls()
         return cls(
             risk_level=data.get("risk_level", "low"),
             risk_warning=data.get("risk_warning", ""),
             disclaimer=data.get("disclaimer", ""),
-            structured_data=StructuredMedicalData.from_dict(data.get("structured_data", {})),
+            structured_data=StructuredMedicalData.from_dict(
+                data.get("structured_data", {})
+            ),
         )
 
 
 # 工具函数
+
 
 def get_current_time() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -343,7 +368,9 @@ def register_user(username: str, password: str) -> str:
     return "✅ 注册成功！请登录"
 
 
-def login_user(username: str, password: str) -> Tuple[bool, str, Optional[str], Optional[str], Optional[str]]:
+def login_user(
+    username: str, password: str
+) -> Tuple[bool, str, Optional[str], Optional[str], Optional[str]]:
     if not username or not password:
         return False, "❌ 用户名和密码不能为空", None, None, None
     row = db_get_user(username)
@@ -352,7 +379,7 @@ def login_user(username: str, password: str) -> Tuple[bool, str, Optional[str], 
     if not verify_password(password, row["password_hash"], row["salt"]):
         return False, "❌ 密码错误", None, None, None
 
-    token   = create_session_token(username)
+    token = create_session_token(username)
     conv_id = generate_conversation_id(username)
     db_save_conversation(conv_id, username, DEFAULT_CONV_TITLE)
     logger.info(f"用户登录成功: {username}")
@@ -373,7 +400,11 @@ def get_conversation_list(token: str) -> List[str]:
     if not username:
         return [NO_HISTORY_LABEL]
     rows = db_get_conversations(username)
-    return [f"{r['title']} ({r['created_at']})" for r in rows] if rows else [NO_HISTORY_LABEL]
+    return (
+        [f"{r['title']} ({r['created_at']})" for r in rows]
+        if rows
+        else [NO_HISTORY_LABEL]
+    )
 
 
 def get_conversation_id_by_display(token: str, display: str) -> Optional[str]:
@@ -400,16 +431,16 @@ def delete_conversation(token: str, conv_id: str) -> str:
 # HTML 格式化 — 风险徽章（公共组件）
 def format_risk_badge(risk_level: str) -> str:
     configs = {
-        "low":      ("🟢", "低风险", "#10b981"),
-        "medium":   ("🟡", "中风险", "#f59e0b"),
-        "high":     ("🟠", "高风险", "#f97316"),
-        "critical": ("🔴", "危急",   "#ef4444"),
+        "low": ("🟢", "低风险", "#10b981"),
+        "medium": ("🟡", "中风险", "#f59e0b"),
+        "high": ("🟠", "高风险", "#f97316"),
+        "critical": ("🔴", "危急", "#ef4444"),
     }
     emoji, label, color = configs.get(risk_level, ("⚪", "未知", "#6b7280"))
     return (
         f'<span style="background-color:{color}20;color:{color};padding:4px 12px;'
         f'border-radius:16px;font-weight:600;font-size:12px;border:1px solid {color}40;">'
-        f'{emoji} {label}</span>'
+        f"{emoji} {label}</span>"
     )
 
 
@@ -432,8 +463,8 @@ def format_medical_card_for_chat(medical: MedicalExtension) -> str:
 
     # 紧急度配置
     urgency_configs = {
-        "routine":   ("🟢", "常规就诊", "#10b981", "非紧急，可预约就诊"),
-        "urgent":    ("🟡", "尽快就医", "#f59e0b", "建议 24 小时内就医"),
+        "routine": ("🟢", "常规就诊", "#10b981", "非紧急，可预约就诊"),
+        "urgent": ("🟡", "尽快就医", "#f59e0b", "建议 24 小时内就医"),
         "emergency": ("🔴", "立即急诊", "#ef4444", "请立即前往急诊或拨打 120"),
     }
 
@@ -448,24 +479,26 @@ def format_medical_card_for_chat(medical: MedicalExtension) -> str:
     if medical.risk_warning and medical.risk_warning not in ("", "无高危风险"):
         risk_bg = {
             "critical": ("#fef2f2", "#fecaca", "#dc2626"),
-            "high":     ("#fff7ed", "#fed7aa", "#ea580c"),
-            "medium":   ("#fffbeb", "#fde68a", "#d97706"),
-            "low":      ("#eff6ff", "#bfdbfe", "#2563eb"),
+            "high": ("#fff7ed", "#fed7aa", "#ea580c"),
+            "medium": ("#fffbeb", "#fde68a", "#d97706"),
+            "low": ("#eff6ff", "#bfdbfe", "#2563eb"),
         }
-        bg, border, text_color = risk_bg.get(medical.risk_level, ("#f8fafc", "#e2e8f0", "#374151"))
+        bg, border, text_color = risk_bg.get(
+            medical.risk_level, ("#f8fafc", "#e2e8f0", "#374151")
+        )
         safe_warning = html.escape(medical.risk_warning)
         parts.append(
             f'<div style="background:{bg};border:1px solid {border};border-radius:10px;'
             f'padding:12px 14px;margin-bottom:12px;display:flex;align-items:flex-start;gap:10px;">'
             f'<span style="font-size:18px;flex-shrink:0;">🛡️</span>'
-            f'<div>'
+            f"<div>"
             f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">'
             f'<span style="font-weight:600;color:#374151;font-size:13px;">风险评估</span>'
-            f'{format_risk_badge(medical.risk_level)}'
-            f'</div>'
+            f"{format_risk_badge(medical.risk_level)}"
+            f"</div>"
             f'<p style="color:{text_color};font-size:13px;line-height:1.6;margin:0;">{safe_warning}</p>'
-            f'</div>'
-            f'</div>'
+            f"</div>"
+            f"</div>"
         )
 
     # ── ② 紧急度标签 + 置信度（Markdown 中无此可视化信息）──────────────────
@@ -484,30 +517,32 @@ def format_medical_card_for_chat(medical: MedicalExtension) -> str:
             f'<div style="display:flex;align-items:center;gap:8px;">'
             f'<span style="font-size:20px;">{emoji}</span>'
             f'<span style="font-weight:700;color:{color};font-size:15px;">{label}</span>'
-            f'</div>'
+            f"</div>"
             f'<span style="font-size:12px;color:#6b7280;'
             f'background:#f1f5f9;padding:3px 10px;border-radius:20px;">'
-            f'置信度 {confidence_pct}%</span>'
-            f'</div>'
+            f"置信度 {confidence_pct}%</span>"
+            f"</div>"
             # 说明文字
             f'<p style="color:#6b7280;font-size:12px;margin:6px 0 10px 28px;">{desc}</p>'
         )
 
         # ── ③ 科室快捷 chip（视觉补充，Markdown 中为纯文本列表）────────────
         if triage.recommended_departments:
-            chips = "".join([
-                f'<span style="background:{color}15;color:{color};border:1px solid {color}30;'
-                f'padding:4px 12px;border-radius:20px;font-size:12px;font-weight:500;">'
-                f'🏥 {html.escape(d)}</span>'
-                for d in triage.recommended_departments
-            ])
+            chips = "".join(
+                [
+                    f'<span style="background:{color}15;color:{color};border:1px solid {color}30;'
+                    f'padding:4px 12px;border-radius:20px;font-size:12px;font-weight:500;">'
+                    f"🏥 {html.escape(d)}</span>"
+                    for d in triage.recommended_departments
+                ]
+            )
             parts.append(
                 f'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-left:28px;">{chips}</div>'
             )
 
-        parts.append('</div>')   # 关闭紧急度块
+        parts.append("</div>")  # 关闭紧急度块
 
-    parts.append('</div>')       # 关闭分隔线容器
+    parts.append("</div>")  # 关闭分隔线容器
     return "".join(parts)
 
 
@@ -516,15 +551,15 @@ def format_message_content(content: str) -> str:
     """格式化消息内容：JSON 结构体转 Markdown，普通文本直接返回。"""
     if not content:
         return content
-    
+
     # 自然语言回复末尾附带 JSON 格式的数据检测并移除末尾的 JSON 部分，只保留自然语言文本
-    json_pattern = r'\s*\{[\s\S]*\}\s*$'
-    content_without_json = re.sub(json_pattern, '', content).strip()
-    
+    json_pattern = r"\s*\{[\s\S]*\}\s*$"
+    content_without_json = re.sub(json_pattern, "", content).strip()
+
     # 如果移除 JSON 后内容为空，尝试原始内容
     if not content_without_json:
         content_without_json = content.strip()
-    
+
     try:
         data = json.loads(content_without_json)
         if isinstance(data, dict):
@@ -558,7 +593,9 @@ def format_json_to_markdown(data: dict) -> str:
     if data.get("risk_level"):
         emojis = {"low": "🟢", "medium": "🟡", "high": "🟠", "critical": "🔴"}
         md.append("### ⚡ 风险等级\n")
-        md.append(f"{emojis.get(data['risk_level'], '⚪')} **{data['risk_level'].upper()}**\n\n")
+        md.append(
+            f"{emojis.get(data['risk_level'], '⚪')} **{data['risk_level'].upper()}**\n\n"
+        )
 
     if data.get("recommendations"):
         md.append("### 💡 健康建议\n")
@@ -597,36 +634,41 @@ def send_chat_request(
         Response: HTTP 响应对象（流式）或 JSON（非流式）
     """
     payload = {
-        "messages":       messages,
-        "stream":         stream,
-        "userId":         user_id,
+        "messages": messages,
+        "stream": stream,
+        "userId": user_id,
         "conversationId": conversation_id,
     }
-    
+
     headers = {"Content-Type": "application/json"}
-    
+
     if username:
         api_key = get_user_api_key(username)
         if api_key:
             headers["X-API-Key"] = api_key
-    
+
     try:
         if stream:
             return _http_session.post(
-                CHAT_ENDPOINT, headers=headers,
-                data=json.dumps(payload), stream=True, timeout=120
+                CHAT_ENDPOINT,
+                headers=headers,
+                data=json.dumps(payload),
+                stream=True,
+                timeout=120,
             )
         else:
             return _http_session.post(
-                CHAT_ENDPOINT, headers=headers,
-                data=json.dumps(payload), timeout=60
+                CHAT_ENDPOINT, headers=headers, data=json.dumps(payload), timeout=60
             ).json()
     except requests.exceptions.ConnectionError as e:
-        logger.error(f"连接失败: {e}"); raise
+        logger.error(f"连接失败: {e}")
+        raise
     except requests.exceptions.Timeout as e:
-        logger.error(f"请求超时: {e}"); raise
+        logger.error(f"请求超时: {e}")
+        raise
     except requests.exceptions.RequestException as e:
-        logger.error(f"请求失败: {e}"); raise
+        logger.error(f"请求失败: {e}")
+        raise
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -743,63 +785,70 @@ DOCUMENTS_LIST_ENDPOINT = f"{API_BASE_URL}/v1/documents"
 DOCUMENTS_STATS_ENDPOINT = f"{API_BASE_URL}/v1/documents/stats"
 
 
-def upload_document_to_api(token: str, file_path: str, doc_type: str, username: Optional[str] = None) -> Tuple[bool, str]:
+def upload_document_to_api(
+    token: str, file_path: str, doc_type: str, username: Optional[str] = None
+) -> Tuple[bool, str]:
     """
     上传文档到后端 API。
-    
+
     Args:
         token: 用户会话 token
         file_path: 文件路径
         doc_type: 文档类型
         username: 用户名（用于获取 API Key）
-        
+
     Returns:
         Tuple[bool, str]: (成功标志, 消息)
     """
     try:
-        with open(file_path, 'rb') as f:
-            files = {'file': (os.path.basename(file_path), f)}
-            data = {'doc_type': doc_type}
-            
+        with open(file_path, "rb") as f:
+            files = {"file": (os.path.basename(file_path), f)}
+            data = {"doc_type": doc_type}
+
             headers = {}
             if username:
                 api_key = get_user_api_key(username)
                 if api_key:
-                    headers['X-API-Key'] = api_key
-            
+                    headers["X-API-Key"] = api_key
+
             response = requests.post(
                 DOCUMENTS_UPLOAD_ENDPOINT,
                 files=files,
                 data=data,
                 headers=headers,
-                timeout=60
+                timeout=60,
             )
-            
+
             if response.status_code == 200:
                 result = response.json()
-                if result.get('success'):
-                    return True, f"✅ 上传成功: {result.get('filename')} ({result.get('chunks_count')} 个文本块)"
+                if result.get("success"):
+                    return (
+                        True,
+                        f"✅ 上传成功: {result.get('filename')} ({result.get('chunks_count')} 个文本块)",
+                    )
                 else:
                     return False, f"❌ 上传失败: {result.get('error', '未知错误')}"
             elif response.status_code == 401:
                 return False, "❌ 认证失败，请重新登录"
             else:
                 return False, f"❌ 上传失败: HTTP {response.status_code}"
-                
+
     except Exception as e:
         return False, f"❌ 上传异常: {str(e)}"
 
 
-def get_documents_from_api(token: str, limit: int = 10, offset: int = 0, username: Optional[str] = None) -> Tuple[bool, List[Dict], str]:
+def get_documents_from_api(
+    token: str, limit: int = 10, offset: int = 0, username: Optional[str] = None
+) -> Tuple[bool, List[Dict], str]:
     """
     从后端 API 获取文档列表。
-    
+
     Args:
         token: 用户会话 token
         limit: 返回数量限制
         offset: 偏移量
         username: 用户名（用于获取 API Key）
-        
+
     Returns:
         Tuple[bool, List[Dict], str]: (成功标志, 文档列表, 消息)
     """
@@ -808,38 +857,41 @@ def get_documents_from_api(token: str, limit: int = 10, offset: int = 0, usernam
         if username:
             api_key = get_user_api_key(username)
             if api_key:
-                headers['X-API-Key'] = api_key
-        
-        params = {'limit': limit, 'offset': offset}
-        
+                headers["X-API-Key"] = api_key
+
+        params = {"limit": limit, "offset": offset}
+
         response = requests.get(
-            DOCUMENTS_LIST_ENDPOINT,
-            headers=headers,
-            params=params,
-            timeout=10
+            DOCUMENTS_LIST_ENDPOINT, headers=headers, params=params, timeout=10
         )
-        
+
         if response.status_code == 200:
             result = response.json()
-            return True, result.get('documents', []), f"共 {result.get('total', 0)} 个文档"
+            return (
+                True,
+                result.get("documents", []),
+                f"共 {result.get('total', 0)} 个文档",
+            )
         elif response.status_code == 401:
             return False, [], "认证失败，请重新登录"
         else:
             return False, [], f"获取失败: HTTP {response.status_code}"
-            
+
     except Exception as e:
         return False, [], f"获取异常: {str(e)}"
 
 
-def delete_document_from_api(token: str, file_md5: str, username: Optional[str] = None) -> Tuple[bool, str]:
+def delete_document_from_api(
+    token: str, file_md5: str, username: Optional[str] = None
+) -> Tuple[bool, str]:
     """
     从后端 API 删除文档。
-    
+
     Args:
         token: 用户会话 token
         file_md5: 文件 MD5 指纹
         username: 用户名（用于获取 API Key）
-        
+
     Returns:
         Tuple[bool, str]: (成功标志, 消息)
     """
@@ -848,37 +900,40 @@ def delete_document_from_api(token: str, file_md5: str, username: Optional[str] 
         if username:
             api_key = get_user_api_key(username)
             if api_key:
-                headers['X-API-Key'] = api_key
-        
+                headers["X-API-Key"] = api_key
+
         response = requests.delete(
-            f"{DOCUMENTS_LIST_ENDPOINT}/{file_md5}",
-            headers=headers,
-            timeout=10
+            f"{DOCUMENTS_LIST_ENDPOINT}/{file_md5}", headers=headers, timeout=10
         )
-        
+
         if response.status_code == 200:
             result = response.json()
-            if result.get('success'):
-                return True, f"✅ 删除成功: {result.get('deleted_chunks')} 个文本块已删除"
+            if result.get("success"):
+                return (
+                    True,
+                    f"✅ 删除成功: {result.get('deleted_chunks')} 个文本块已删除",
+                )
             else:
                 return False, f"❌ 删除失败: {result.get('error', '未知错误')}"
         elif response.status_code == 401:
             return False, "❌ 认证失败，请重新登录"
         else:
             return False, f"❌ 删除失败: HTTP {response.status_code}"
-            
+
     except Exception as e:
         return False, f"❌ 删除异常: {str(e)}"
 
 
-def get_document_stats_from_api(token: str, username: Optional[str] = None) -> Tuple[bool, Dict, str]:
+def get_document_stats_from_api(
+    token: str, username: Optional[str] = None
+) -> Tuple[bool, Dict, str]:
     """
     从后端 API 获取文档统计信息。
-    
+
     Args:
         token: 用户会话 token
         username: 用户名（用于获取 API Key）
-        
+
     Returns:
         Tuple[bool, Dict, str]: (成功标志, 统计信息, 消息)
     """
@@ -887,14 +942,10 @@ def get_document_stats_from_api(token: str, username: Optional[str] = None) -> T
         if username:
             api_key = get_user_api_key(username)
             if api_key:
-                headers['X-API-Key'] = api_key
-        
-        response = requests.get(
-            DOCUMENTS_STATS_ENDPOINT,
-            headers=headers,
-            timeout=10
-        )
-        
+                headers["X-API-Key"] = api_key
+
+        response = requests.get(DOCUMENTS_STATS_ENDPOINT, headers=headers, timeout=10)
+
         if response.status_code == 200:
             result = response.json()
             return True, result, "统计信息获取成功"
@@ -902,7 +953,7 @@ def get_document_stats_from_api(token: str, username: Optional[str] = None) -> T
             return False, {}, "认证失败，请重新登录"
         else:
             return False, {}, f"获取失败: HTTP {response.status_code}"
-            
+
     except Exception as e:
         return False, {}, f"获取异常: {str(e)}"
 
@@ -911,20 +962,21 @@ def get_document_stats_from_api(token: str, username: Optional[str] = None) -> T
 # Gradio 应用
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 def create_gradio_app():
     with gr.Blocks(
         title="智能分诊助手",
     ) as app:
 
         # ── 全局状态 ──────────────────────────────────────────────────────────
-        logged_in         = gr.State(False)
-        current_token     = gr.State(None)
-        current_user      = gr.State(None)
-        current_user_id   = gr.State(None)
-        current_conv_id   = gr.State(None)
-        chat_history      = gr.State([])
-        stream_mode       = gr.State(True)
-        current_medical   = gr.State(None)
+        logged_in = gr.State(False)
+        current_token = gr.State(None)
+        current_user = gr.State(None)
+        current_user_id = gr.State(None)
+        current_conv_id = gr.State(None)
+        chat_history = gr.State([])
+        stream_mode = gr.State(True)
+        current_medical = gr.State(None)
         sidebar_collapsed = gr.State(False)
 
         # ══════════════════════════════════════════════════════════════════════
@@ -946,17 +998,21 @@ def create_gradio_app():
             """)
 
             login_username = gr.Textbox(label="用户名", placeholder="请输入用户名")
-            login_password = gr.Textbox(label="密码",   placeholder="请输入密码", type="password")
+            login_password = gr.Textbox(
+                label="密码", placeholder="请输入密码", type="password"
+            )
 
             with gr.Row():
-                login_button    = gr.Button("登录", variant="primary",   scale=1)
+                login_button = gr.Button("登录", variant="primary", scale=1)
                 register_button = gr.Button("注册", variant="secondary", scale=1)
 
             login_output = gr.Textbox(label="提示", interactive=False)
-            gr.Markdown('<p style="text-align:center;color:#64748b;font-size:13px;margin-top:16px;">还没有账号？</p>')
+            gr.Markdown(
+                '<p style="text-align:center;color:#64748b;font-size:13px;margin-top:16px;">还没有账号？</p>'
+            )
             switch_to_register = gr.Button("立即注册", variant="secondary", size="sm")
 
-            health_status    = gr.HTML("")
+            health_status = gr.HTML("")
             check_health_btn = gr.Button("检查后端服务", size="sm", variant="secondary")
 
         # ══════════════════════════════════════════════════════════════════════
@@ -966,10 +1022,12 @@ def create_gradio_app():
             gr.Markdown("### 注册新账号")
 
             reg_username = gr.Textbox(label="用户名", placeholder="请输入用户名")
-            reg_password = gr.Textbox(label="密码",   placeholder="请输入密码", type="password")
+            reg_password = gr.Textbox(
+                label="密码", placeholder="请输入密码", type="password"
+            )
 
             with gr.Row():
-                reg_button      = gr.Button("提交注册", variant="primary",   scale=1)
+                reg_button = gr.Button("提交注册", variant="primary", scale=1)
                 switch_to_login = gr.Button("返回登录", variant="secondary", scale=1)
 
             reg_output = gr.Textbox(label="提示", interactive=False)
@@ -986,16 +1044,22 @@ def create_gradio_app():
                 # ── 左侧面板 ─────────────────────────────────────────────────
                 with gr.Column(scale=1, min_width=60) as sidebar_col:
                     toggle_sidebar_btn = gr.Button(
-                        "◀", variant="secondary", size="sm",
-                        elem_classes=["sidebar-toggle-btn"]
+                        "◀",
+                        variant="secondary",
+                        size="sm",
+                        elem_classes=["sidebar-toggle-btn"],
                     )
 
                     with gr.Column(visible=True) as sidebar_content:
                         gr.Markdown("### 📊 智能分诊")
 
                         with gr.Accordion("⚙️ 功能设置", open=False):
-                            stream_toggle = gr.Checkbox(label="流式输出", value=True, interactive=True)
-                            logout_btn    = gr.Button("🚪 退出登录", variant="secondary", size="sm")
+                            stream_toggle = gr.Checkbox(
+                                label="流式输出", value=True, interactive=True
+                            )
+                            logout_btn = gr.Button(
+                                "🚪 退出登录", variant="secondary", size="sm"
+                            )
 
                         with gr.Accordion("📄 文档管理", open=False):
                             gr.Markdown("""
@@ -1005,14 +1069,14 @@ def create_gradio_app():
                                 </p>
                             </div>
                             """)
-                            
+
                             # 文档上传
                             doc_upload_file = gr.File(
                                 label="上传文档",
                                 file_types=[".pdf", ".docx", ".txt"],
-                                type="filepath"
+                                type="filepath",
                             )
-                            
+
                             doc_type_dropdown = gr.Dropdown(
                                 label="文档类型",
                                 choices=[
@@ -1023,31 +1087,47 @@ def create_gradio_app():
                                     ("其他", "other"),
                                 ],
                                 value="other",
-                                interactive=True
+                                interactive=True,
                             )
-                            
-                            upload_doc_btn = gr.Button("📤 上传文档", variant="primary", size="sm")
-                            upload_doc_status = gr.Textbox(label="", interactive=False, visible=False)
-                            
+
+                            upload_doc_btn = gr.Button(
+                                "📤 上传文档", variant="primary", size="sm"
+                            )
+                            upload_doc_status = gr.Textbox(
+                                label="", interactive=False, visible=False
+                            )
+
                             # 文档统计
                             gr.Markdown("---")
-                            doc_stats_display = gr.HTML("<p style='color:#64748b;font-size:12px;'>点击刷新查看统计</p>")
-                            refresh_stats_btn = gr.Button("🔄 刷新统计", variant="secondary", size="sm")
-                            
+                            doc_stats_display = gr.HTML(
+                                "<p style='color:#64748b;font-size:12px;'>点击刷新查看统计</p>"
+                            )
+                            refresh_stats_btn = gr.Button(
+                                "🔄 刷新统计", variant="secondary", size="sm"
+                            )
+
                             # 文档列表
                             gr.Markdown("---")
-                            doc_list_display = gr.HTML("<p style='color:#64748b;font-size:12px;'>点击查看文档列表</p>")
-                            refresh_docs_btn = gr.Button("📋 查看文档", variant="secondary", size="sm")
-                            
+                            doc_list_display = gr.HTML(
+                                "<p style='color:#64748b;font-size:12px;'>点击查看文档列表</p>"
+                            )
+                            refresh_docs_btn = gr.Button(
+                                "📋 查看文档", variant="secondary", size="sm"
+                            )
+
                             # 删除文档
                             gr.Markdown("---")
                             delete_doc_md5 = gr.Textbox(
                                 label="删除文档（输入 MD5）",
                                 placeholder="从文档列表中复制 MD5",
-                                interactive=True
+                                interactive=True,
                             )
-                            delete_doc_btn = gr.Button("🗑️ 删除文档", variant="stop", size="sm")
-                            delete_doc_status = gr.Textbox(label="", interactive=False, visible=False)
+                            delete_doc_btn = gr.Button(
+                                "🗑️ 删除文档", variant="stop", size="sm"
+                            )
+                            delete_doc_status = gr.Textbox(
+                                label="", interactive=False, visible=False
+                            )
 
                         with gr.Accordion("📋 会话管理", open=False):
                             conv_dropdown = gr.Dropdown(
@@ -1058,23 +1138,29 @@ def create_gradio_app():
                                 allow_custom_value=True,
                             )
                             with gr.Row():
-                                new_conv_btn = gr.Button("新建", variant="primary",   size="sm", scale=1)
-                                del_conv_btn = gr.Button("删除", variant="secondary", size="sm", scale=1)
+                                new_conv_btn = gr.Button(
+                                    "新建", variant="primary", size="sm", scale=1
+                                )
+                                del_conv_btn = gr.Button(
+                                    "删除", variant="secondary", size="sm", scale=1
+                                )
 
                 # ── 主内容区 ─────────────────────────────────────────────────
                 with gr.Column(scale=5) as main_col:
                     with gr.Row():
                         welcome_text = gr.Markdown("### 欢迎，用户")
-                        conv_title   = gr.Markdown(f"**当前会话：** {DEFAULT_CONV_TITLE}")
+                        conv_title = gr.Markdown(f"**当前会话：** {DEFAULT_CONV_TITLE}")
 
                     # 欢迎面板
                     with gr.Column(visible=True) as welcome_panel:
-                        gr.HTML(create_welcome_header_html(), elem_classes=["welcome-fade"])
+                        gr.HTML(
+                            create_welcome_header_html(), elem_classes=["welcome-fade"]
+                        )
                         with gr.Row():
                             sug_btns: List[Tuple[gr.Button, str]] = []
                             for i in range(0, len(SUGGESTIONS), 2):
                                 with gr.Column():
-                                    for emoji, text in SUGGESTIONS[i:i+2]:
+                                    for emoji, text in SUGGESTIONS[i : i + 2]:
                                         btn = gr.Button(
                                             f"{emoji}  {text}",
                                             variant="secondary",
@@ -1100,7 +1186,9 @@ def create_gradio_app():
                     )
 
                     with gr.Row():
-                        send_btn  = gr.Button("发送",     variant="primary",   scale=2, elem_id="send_btn")
+                        send_btn = gr.Button(
+                            "发送", variant="primary", scale=2, elem_id="send_btn"
+                        )
                         clear_btn = gr.Button("清空对话", variant="secondary", scale=1)
 
         # ══════════════════════════════════════════════════════════════════════
@@ -1116,24 +1204,40 @@ def create_gradio_app():
             )
 
         def show_login():
-            return gr.update(visible=True), gr.update(visible=False), gr.update(visible=False)
+            return (
+                gr.update(visible=True),
+                gr.update(visible=False),
+                gr.update(visible=False),
+            )
 
         def show_register():
-            return gr.update(visible=False), gr.update(visible=True), gr.update(visible=False)
+            return (
+                gr.update(visible=False),
+                gr.update(visible=True),
+                gr.update(visible=False),
+            )
 
         def show_chat():
-            return gr.update(visible=False), gr.update(visible=False), gr.update(visible=True)
+            return (
+                gr.update(visible=False),
+                gr.update(visible=False),
+                gr.update(visible=True),
+            )
 
         # ── 登录 ──────────────────────────────────────────────────────────────
         def handle_login(username, password):
             success, message, user_id, conv_id, token = login_user(username, password)
 
             if success:
-                row       = db_get_user(username)
+                row = db_get_user(username)
                 collapsed = bool(row["sidebar_collapsed"]) if row else False
                 conv_list = get_conversation_list(token)
                 return [
-                    True, token, username, user_id, conv_id,
+                    True,
+                    token,
+                    username,
+                    user_id,
+                    conv_id,
                     "",
                     *show_chat(),
                     f"### 欢迎，{username}",
@@ -1149,7 +1253,11 @@ def create_gradio_app():
                 ]
 
             return [
-                False, None, None, None, None,
+                False,
+                None,
+                None,
+                None,
+                None,
                 message,
                 *show_login(),
                 "### 欢迎，用户",
@@ -1169,15 +1277,27 @@ def create_gradio_app():
             message = register_user(username, password)
             if "成功" in message:
                 return [message, *show_login(), "", ""]
-            return [message, gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), username, password]
+            return [
+                message,
+                gr.update(visible=False),
+                gr.update(visible=True),
+                gr.update(visible=False),
+                username,
+                password,
+            ]
 
         # ── 登出 ──────────────────────────────────────────────────────────────
         def handle_logout(token):
             revoke_session_token(token)
             return [
-                False, None, None, None, None,
+                False,
+                None,
+                None,
+                None,
+                None,
                 *show_login(),
-                "", "",
+                "",
+                "",
                 gr.update(visible=True),
                 gr.update(value=[], visible=False),
                 [],
@@ -1193,8 +1313,11 @@ def create_gradio_app():
             new_conv_id, _ = create_new_conversation(token)
             if not new_conv_id:
                 return [
-                    None, f"**当前会话：** {DEFAULT_CONV_TITLE}", [],
-                    gr.update(visible=True), gr.update(value=[], visible=False),
+                    None,
+                    f"**当前会话：** {DEFAULT_CONV_TITLE}",
+                    [],
+                    gr.update(visible=True),
+                    gr.update(value=[], visible=False),
                     gr.update(choices=[NO_HISTORY_LABEL], value=NO_HISTORY_LABEL),
                     gr.update(value="", visible=False),
                 ]
@@ -1212,29 +1335,53 @@ def create_gradio_app():
         # ── 切换会话 ──────────────────────────────────────────────────────────
         def handle_select_conversation(token, selected, current_conv):
             if not token or selected == NO_HISTORY_LABEL:
-                return [current_conv, f"**当前会话：** {DEFAULT_CONV_TITLE}",
-                        [], gr.update(visible=False), gr.update(visible=True), ""]
+                return [
+                    current_conv,
+                    f"**当前会话：** {DEFAULT_CONV_TITLE}",
+                    [],
+                    gr.update(visible=False),
+                    gr.update(visible=True),
+                    "",
+                ]
 
             conv_id = get_conversation_id_by_display(token, selected)
             if not conv_id:
-                return [current_conv, f"**当前会话：** {DEFAULT_CONV_TITLE}",
-                        [], gr.update(visible=False), gr.update(visible=True), ""]
+                return [
+                    current_conv,
+                    f"**当前会话：** {DEFAULT_CONV_TITLE}",
+                    [],
+                    gr.update(visible=False),
+                    gr.update(visible=True),
+                    "",
+                ]
 
             messages = db_get_messages(conv_id)
-            title    = selected.rsplit(" (", 1)[0]
+            title = selected.rsplit(" (", 1)[0]
 
             if messages:
-                return [conv_id, f"**当前会话：** {title}", messages,
-                        gr.update(value=messages, visible=True), gr.update(visible=False), ""]
+                return [
+                    conv_id,
+                    f"**当前会话：** {title}",
+                    messages,
+                    gr.update(value=messages, visible=True),
+                    gr.update(visible=False),
+                    "",
+                ]
             else:
-                return [conv_id, f"**当前会话：** {title}", [],
-                        gr.update(value=[], visible=False), gr.update(visible=True), ""]
+                return [
+                    conv_id,
+                    f"**当前会话：** {title}",
+                    [],
+                    gr.update(value=[], visible=False),
+                    gr.update(visible=True),
+                    "",
+                ]
 
         # ── 删除会话 ──────────────────────────────────────────────────────────
         def handle_delete_conversation(token, conv_id):
-            msg         = delete_conversation(token, conv_id)
+            msg = delete_conversation(token, conv_id)
             new_conv_id, _ = create_new_conversation(token)
-            conv_list   = get_conversation_list(token)
+            conv_list = get_conversation_list(token)
             return [
                 gr.update(value=msg, visible=True),
                 gr.update(choices=conv_list, value=NO_HISTORY_LABEL),
@@ -1262,33 +1409,35 @@ def create_gradio_app():
             """处理文档上传"""
             if not token:
                 return gr.update(value="❌ 请先登录", visible=True)
-            
+
             if not file_path:
                 return gr.update(value="❌ 请选择文件", visible=True)
-            
+
             # 获取用户名（从 token）
             username = validate_session_token(token)
-            
-            success, message = upload_document_to_api(token, file_path, doc_type, username)
+
+            success, message = upload_document_to_api(
+                token, file_path, doc_type, username
+            )
             return gr.update(value=message, visible=True)
 
         def handle_refresh_stats(token):
             """刷新文档统计"""
             if not token:
                 return "<p style='color:#ef4444;font-size:12px;'>❌ 请先登录</p>"
-            
+
             username = validate_session_token(token)
             success, stats, message = get_document_stats_from_api(token, username)
-            
+
             if success:
                 doc_types_html = ""
-                for doc_type, count in stats.get('doc_types', {}).items():
+                for doc_type, count in stats.get("doc_types", {}).items():
                     doc_type_names = {
-                        'health_report': '体检报告',
-                        'medical_record': '病历',
-                        'lab_report': '检验报告',
-                        'prescription': '处方',
-                        'other': '其他'
+                        "health_report": "体检报告",
+                        "medical_record": "病历",
+                        "lab_report": "检验报告",
+                        "prescription": "处方",
+                        "other": "其他",
                     }
                     doc_types_html += f"""
                     <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #e2e8f0;">
@@ -1296,7 +1445,7 @@ def create_gradio_app():
                         <span style="color:#1e40af;font-weight:600;font-size:12px;">{count}</span>
                     </div>
                     """
-                
+
                 return f"""
                 <div style="background:#f8fafc;border-radius:8px;padding:12px;margin-bottom:8px;">
                     <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
@@ -1320,21 +1469,23 @@ def create_gradio_app():
             """刷新文档列表"""
             if not token:
                 return "<p style='color:#ef4444;font-size:12px;'>❌ 请先登录</p>"
-            
+
             username = validate_session_token(token)
-            success, documents, message = get_documents_from_api(token, limit=10, offset=0, username=username)
-            
+            success, documents, message = get_documents_from_api(
+                token, limit=10, offset=0, username=username
+            )
+
             if success and documents:
                 docs_html = ""
                 for doc in documents:
                     doc_type_names = {
-                        'health_report': '🏥 体检报告',
-                        'medical_record': '📋 病历',
-                        'lab_report': '🔬 检验报告',
-                        'prescription': '💊 处方',
-                        'other': '📄 其他'
+                        "health_report": "🏥 体检报告",
+                        "medical_record": "📋 病历",
+                        "lab_report": "🔬 检验报告",
+                        "prescription": "💊 处方",
+                        "other": "📄 其他",
                     }
-                    
+
                     docs_html += f"""
                     <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:10px;margin-bottom:8px;">
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
@@ -1356,7 +1507,7 @@ def create_gradio_app():
                         </div>
                     </div>
                     """
-                
+
                 return f"""
                 <div style="max-height:400px;overflow-y:auto;">
                     {docs_html}
@@ -1371,12 +1522,14 @@ def create_gradio_app():
             """处理文档删除"""
             if not token:
                 return gr.update(value="❌ 请先登录", visible=True)
-            
+
             if not file_md5 or not file_md5.strip():
                 return gr.update(value="❌ 请输入文档 MD5", visible=True)
-            
+
             username = validate_session_token(token)
-            success, message = delete_document_from_api(token, file_md5.strip(), username)
+            success, message = delete_document_from_api(
+                token, file_md5.strip(), username
+            )
             return gr.update(value=message, visible=True)
 
         # ── 发送消息（核心） ──────────────────────────────────────────────────
@@ -1395,20 +1548,32 @@ def create_gradio_app():
 
             username = validate_session_token(token)
             if not username or not user_id or not conv_id:
-                yield [gr.update(value=""), history, history, None, gr.update(interactive=True)]
+                yield [
+                    gr.update(value=""),
+                    history,
+                    history,
+                    None,
+                    gr.update(interactive=True),
+                ]
                 return
 
             # 频率限制
             allowed, rate_msg = check_rate_limit(token)
             if not allowed:
                 err_history = history + [
-                    {"role": "user",      "content": message.strip()},
+                    {"role": "user", "content": message.strip()},
                     {"role": "assistant", "content": rate_msg},
                 ]
-                yield [gr.update(value=""), err_history, err_history, None, gr.update(interactive=True)]
+                yield [
+                    gr.update(value=""),
+                    err_history,
+                    err_history,
+                    None,
+                    gr.update(interactive=True),
+                ]
                 return
 
-            user_msg    = {"role": "user", "content": message.strip()}
+            user_msg = {"role": "user", "content": message.strip()}
             new_history = history + [user_msg]
 
             # 禁用发送按钮，清空输入框
@@ -1420,11 +1585,15 @@ def create_gradio_app():
                 gr.update(interactive=False),
             ]
 
-            api_messages = [{"role": m["role"], "content": m["content"]} for m in new_history]
+            api_messages = [
+                {"role": m["role"], "content": m["content"]} for m in new_history
+            ]
 
             try:
                 if stream:
-                    response    = send_chat_request(api_messages, user_id, conv_id, stream=True, username=username)
+                    response = send_chat_request(
+                        api_messages, user_id, conv_id, stream=True, username=username
+                    )
                     accumulated = ""
                     medical_ext = None
 
@@ -1438,16 +1607,24 @@ def create_gradio_app():
                             continue
 
                         try:
-                            data   = json.loads(json_str)
+                            data = json.loads(json_str)
                             choice = data.get("choices", [{}])[0]
-                            delta  = choice.get("delta", {})
+                            delta = choice.get("delta", {})
 
                             # 文本增量（流式过程中仅显示纯文本，不附卡片）
                             if delta.get("content"):
                                 accumulated += delta["content"]
-                                formatted   = format_message_content(accumulated)
-                                tmp_history = new_history + [{"role": "assistant", "content": formatted}]
-                                yield [gr.update(), tmp_history, tmp_history, None, gr.update(interactive=False)]
+                                formatted = format_message_content(accumulated)
+                                tmp_history = new_history + [
+                                    {"role": "assistant", "content": formatted}
+                                ]
+                                yield [
+                                    gr.update(),
+                                    tmp_history,
+                                    tmp_history,
+                                    None,
+                                    gr.update(interactive=False),
+                                ]
 
                             # 正确提取 medical：顶层 > choice 级 > delta 级
                             if not medical_ext:
@@ -1462,7 +1639,9 @@ def create_gradio_app():
                             if choice.get("finish_reason") == "stop":
                                 # finish chunk 可能也携带 medical
                                 if not medical_ext and data.get("medical"):
-                                    medical_ext = MedicalExtension.from_dict(data["medical"])
+                                    medical_ext = MedicalExtension.from_dict(
+                                        data["medical"]
+                                    )
                                 break
 
                         except json.JSONDecodeError:
@@ -1470,10 +1649,14 @@ def create_gradio_app():
 
                     # ── 流式结束：拼接去重卡片到消息尾部 ─────────────────────
                     formatted_text = format_message_content(accumulated)
-                    card_html      = format_medical_card_for_chat(medical_ext) if medical_ext else ""
+                    card_html = (
+                        format_medical_card_for_chat(medical_ext) if medical_ext else ""
+                    )
                     # Markdown + HTML 卡片合并为单条消息
-                    final_content  = formatted_text + card_html
-                    final_history  = new_history + [{"role": "assistant", "content": final_content}]
+                    final_content = formatted_text + card_html
+                    final_history = new_history + [
+                        {"role": "assistant", "content": final_content}
+                    ]
 
                     db_save_messages(conv_id, final_history)
                     if message[:20] != DEFAULT_CONV_TITLE:
@@ -1489,21 +1672,29 @@ def create_gradio_app():
 
                 else:
                     # 非流式
-                    response_json = send_chat_request(api_messages, user_id, conv_id, stream=False, username=username)
-                    content       = (
+                    response_json = send_chat_request(
+                        api_messages, user_id, conv_id, stream=False, username=username
+                    )
+                    content = (
                         response_json.get("choices", [{}])[0]
                         .get("message", {})
                         .get("content", "未获取到回复")
                     )
                     formatted_text = format_message_content(content)
 
-                    med_data    = response_json.get("medical")
-                    medical_ext = MedicalExtension.from_dict(med_data) if med_data else None
-                    card_html   = format_medical_card_for_chat(medical_ext) if medical_ext else ""
+                    med_data = response_json.get("medical")
+                    medical_ext = (
+                        MedicalExtension.from_dict(med_data) if med_data else None
+                    )
+                    card_html = (
+                        format_medical_card_for_chat(medical_ext) if medical_ext else ""
+                    )
 
                     # ── 非流式：同样拼接卡片 ───────────────────────────────
                     final_content = formatted_text + card_html
-                    final_history = new_history + [{"role": "assistant", "content": final_content}]
+                    final_history = new_history + [
+                        {"role": "assistant", "content": final_content}
+                    ]
 
                     db_save_messages(conv_id, final_history)
                     if message[:20] != DEFAULT_CONV_TITLE:
@@ -1519,7 +1710,9 @@ def create_gradio_app():
 
             except Exception as e:
                 logger.error(f"发送消息失败: {e}")
-                err_history = new_history + [{"role": "assistant", "content": f"❌ 请求失败: {str(e)}"}]
+                err_history = new_history + [
+                    {"role": "assistant", "content": f"❌ 请求失败: {str(e)}"}
+                ]
                 yield [
                     gr.update(),
                     err_history,
@@ -1543,19 +1736,31 @@ def create_gradio_app():
 
         check_health_btn.click(check_health, None, health_status)
 
-        register_button.click(show_register,  None, [login_page, register_page, chat_page])
-        switch_to_register.click(show_register, None, [login_page, register_page, chat_page])
-        switch_to_login.click(show_login,     None, [login_page, register_page, chat_page])
+        register_button.click(
+            show_register, None, [login_page, register_page, chat_page]
+        )
+        switch_to_register.click(
+            show_register, None, [login_page, register_page, chat_page]
+        )
+        switch_to_login.click(show_login, None, [login_page, register_page, chat_page])
 
         login_button.click(
             handle_login,
             [login_username, login_password],
             [
-                logged_in, current_token, current_user, current_user_id, current_conv_id,
+                logged_in,
+                current_token,
+                current_user,
+                current_user_id,
+                current_conv_id,
                 login_output,
-                login_page, register_page, chat_page,
-                welcome_text, conv_title,
-                welcome_panel, chatbot,
+                login_page,
+                register_page,
+                chat_page,
+                welcome_text,
+                conv_title,
+                welcome_panel,
+                chatbot,
                 chat_history,
                 current_medical,
                 conv_dropdown,
@@ -1568,17 +1773,32 @@ def create_gradio_app():
         reg_button.click(
             handle_register,
             [reg_username, reg_password],
-            [reg_output, login_page, register_page, chat_page, reg_username, reg_password],
+            [
+                reg_output,
+                login_page,
+                register_page,
+                chat_page,
+                reg_username,
+                reg_password,
+            ],
         )
 
         logout_btn.click(
             handle_logout,
             [current_token],
             [
-                logged_in, current_token, current_user, current_user_id, current_conv_id,
-                login_page, register_page, chat_page,
-                login_username, login_password,
-                welcome_panel, chatbot,
+                logged_in,
+                current_token,
+                current_user,
+                current_user_id,
+                current_conv_id,
+                login_page,
+                register_page,
+                chat_page,
+                login_username,
+                login_password,
+                welcome_panel,
+                chatbot,
                 chat_history,
                 current_medical,
                 conv_dropdown,
@@ -1591,21 +1811,42 @@ def create_gradio_app():
         new_conv_btn.click(
             handle_new_conversation,
             [current_token],
-            [current_conv_id, conv_title, chat_history,
-             welcome_panel, chatbot, conv_dropdown, chat_status_msg],
+            [
+                current_conv_id,
+                conv_title,
+                chat_history,
+                welcome_panel,
+                chatbot,
+                conv_dropdown,
+                chat_status_msg,
+            ],
         )
 
         conv_dropdown.change(
             handle_select_conversation,
             [current_token, conv_dropdown, current_conv_id],
-            [current_conv_id, conv_title, chat_history, chatbot, welcome_panel, chat_status_msg],
+            [
+                current_conv_id,
+                conv_title,
+                chat_history,
+                chatbot,
+                welcome_panel,
+                chat_status_msg,
+            ],
         )
 
         del_conv_btn.click(
             handle_delete_conversation,
             [current_token, current_conv_id],
-            [chat_status_msg, conv_dropdown, current_conv_id,
-             conv_title, chat_history, welcome_panel, chatbot],
+            [
+                chat_status_msg,
+                conv_dropdown,
+                current_conv_id,
+                conv_title,
+                chat_history,
+                welcome_panel,
+                chatbot,
+            ],
         )
 
         stream_toggle.change(lambda x: x, [stream_toggle], [stream_mode])
@@ -1622,13 +1863,27 @@ def create_gradio_app():
 
         msg_input.submit(
             handle_send_message,
-            [msg_input, chat_history, current_user_id, current_conv_id, current_token, stream_mode],
+            [
+                msg_input,
+                chat_history,
+                current_user_id,
+                current_conv_id,
+                current_token,
+                stream_mode,
+            ],
             _send_outputs,
         ).then(update_welcome_visibility, [chatbot], [welcome_panel, chatbot])
 
         send_btn.click(
             handle_send_message,
-            [msg_input, chat_history, current_user_id, current_conv_id, current_token, stream_mode],
+            [
+                msg_input,
+                chat_history,
+                current_user_id,
+                current_conv_id,
+                current_token,
+                stream_mode,
+            ],
             _send_outputs,
         ).then(update_welcome_visibility, [chatbot], [welcome_panel, chatbot])
 
@@ -1645,33 +1900,25 @@ def create_gradio_app():
         # ══════════════════════════════════════════════════════════════════════
         # 文档管理事件绑定
         # ══════════════════════════════════════════════════════════════════════
-        
+
         # 上传文档
         upload_doc_btn.click(
             handle_upload_document,
             [current_token, doc_upload_file, doc_type_dropdown],
-            [upload_doc_status]
+            [upload_doc_status],
         )
-        
+
         # 刷新统计
         refresh_stats_btn.click(
-            handle_refresh_stats,
-            [current_token],
-            [doc_stats_display]
+            handle_refresh_stats, [current_token], [doc_stats_display]
         )
-        
+
         # 查看文档列表
-        refresh_docs_btn.click(
-            handle_refresh_docs,
-            [current_token],
-            [doc_list_display]
-        )
-        
+        refresh_docs_btn.click(handle_refresh_docs, [current_token], [doc_list_display])
+
         # 删除文档
         delete_doc_btn.click(
-            handle_delete_document,
-            [current_token, delete_doc_md5],
-            [delete_doc_status]
+            handle_delete_document, [current_token, delete_doc_md5], [delete_doc_status]
         )
 
     return app
@@ -1683,7 +1930,7 @@ def create_gradio_app():
 if __name__ == "__main__":
     import socket
 
-    init_db()   # 初始化数据库
+    init_db()  # 初始化数据库
 
     def pick_port(start, end):
         for port in range(start, end + 1):
@@ -1706,6 +1953,8 @@ if __name__ == "__main__":
         server_port=selected_port,
         share=False,
         show_error=True,
-        theme=gr.themes.Soft(primary_hue="blue", secondary_hue="cyan", neutral_hue="slate"),
+        theme=gr.themes.Soft(
+            primary_hue="blue", secondary_hue="cyan", neutral_hue="slate"
+        ),
         css=CUSTOM_CSS,
     )
