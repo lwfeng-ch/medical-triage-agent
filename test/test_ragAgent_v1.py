@@ -1,11 +1,11 @@
-# test_ragAgent_v1.py
+# test_ragAgent.py
 import pytest
 import os
 import time
 from typing import Dict, Any
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 
-from ragAgent_v1 import (
+from ragAgent import (
     create_graph,
     AgentState,
     ToolConfig,
@@ -625,5 +625,5 @@ if __name__ == "__main__":
         "--durations=10",
         "--html=report.html",   # 👈 生成报告
         "--self-contained-html",  # 👈 单文件（推荐）
-        "test_ragAgent_v1.py",
+        "test_ragAgent.py",
     ])
